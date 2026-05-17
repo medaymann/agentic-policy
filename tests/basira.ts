@@ -161,7 +161,7 @@ describe("basira", () => {
     // execute (CPI transfer)
     await program.methods
       .executeIntent()
-      .accounts({
+      .accountsPartial({
         intentRequest: intentPubkey,
         agent: agentPubkey,
         agentAccount: agentPubkey,
@@ -235,7 +235,7 @@ describe("basira", () => {
     try {
       await program.methods
         .executeIntent()
-        .accounts({
+        .accountsPartial({
           intentRequest: intentPubkey,
           agent: agentPubkey,
           agentAccount: agentPubkey,
@@ -272,7 +272,7 @@ describe("basira", () => {
     try {
       await program.methods
         .executeIntent()
-        .accounts({
+        .accountsPartial({
           intentRequest: intentPubkey,
           agent: agentPubkey,
           agentAccount: agentPubkey,

@@ -1,9 +1,9 @@
 /**
  * Basira SDK — thin wrapper around the on-chain `basira` Anchor program.
  *
- * Exposes the few primitives a demo or client needs:
- *   - registerAgent, submitIntent, executeIntent
- *   - PDA derivations
+ * Exposes the primitives a demo or client needs:
+ *   - registerAgent, submitIntent, executeIntent, updatePolicy, fundVault
+ *   - PDA derivations (agent, intent, receipt, vault)
  *   - fetch helpers for agents / intents / receipts
  */
 
@@ -13,6 +13,8 @@ import {
   Connection,
   Keypair,
   PublicKey,
+  SystemProgram,
+  Transaction,
   clusterApiUrl,
 } from "@solana/web3.js";
 import * as fs from "fs";
@@ -62,11 +64,31 @@ export function statusName(status: any): IntentStatusName {
   return (k.charAt(0).toUpperCase() + k.slice(1)) as IntentStatusName;
 }
 
+/** Known program error names — useful for clients that want to detect specific failures. */
+export const BasiraErrorName = {
+  ValueExceedsLimit: "ValueExceedsLimit",
+  ActionNotPermitted: "ActionNotPermitted",
+  IntentNotApproved: "IntentNotApproved",
+  IntentAlreadyFinalised: "IntentAlreadyFinalised",
+  RateLimitExceeded: "RateLimitExceeded",
+  UnauthorizedPolicyUpdate: "UnauthorizedPolicyUpdate",
+  UnsupportedActionCpi: "UnsupportedActionCpi",
+  RecipientRequired: "RecipientRequired",
+  RecipientMismatch: "RecipientMismatch",
+} as const;
+
 // ── PDA helpers ───────────────────────────────────────────────────────────────
 
 export function agentPda(authority: PublicKey, programId: PublicKey) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("agent"), authority.toBuffer()],
+    programId
+  );
+}
+
+export function vaultPda(agent: PublicKey, programId: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("vault"), agent.toBuffer()],
     programId
   );
 }
@@ -103,6 +125,32 @@ export interface BasiraClientOpts {
   keypair?: Keypair;        // overrides keypairPath
 }
 
+export interface RegisterAgentArgs {
+  name: string;
+  maxValueLamports: BN | number;
+  allowedActions: ActionTypeName[];
+  /** Rolling rate-limit window in seconds. 0 disables rate limiting. */
+  windowSeconds?: BN | number;
+  /** Max approved intents per window. Ignored when windowSeconds == 0. */
+  maxPerWindow?: number;
+  /** Separate signer for policy updates. Defaults to the agent's authority. */
+  policyAuthority?: PublicKey | null;
+}
+
+export interface SubmitIntentArgs {
+  action: ActionTypeName;
+  valueLamports: BN | number;
+  /** Required for Transfer; ignored (defaults to Pubkey::default) otherwise. */
+  recipient?: PublicKey | null;
+}
+
+export interface UpdatePolicyArgs {
+  maxValueLamports: BN | number;
+  allowedActions: ActionTypeName[];
+  windowSeconds: BN | number;
+  maxPerWindow: number;
+}
+
 export class BasiraClient {
   readonly connection: Connection;
   readonly wallet: anchor.Wallet;
@@ -134,55 +182,131 @@ export class BasiraClient {
     return agentPda(authority, this.programId)[0];
   }
 
+  vaultPda(agent: PublicKey = this.agentPda()) {
+    return vaultPda(agent, this.programId)[0];
+  }
+
   // ── instructions ──────────────────────────────────────────────────────────
 
-  async registerAgent(
-    name: string,
-    maxValueLamports: BN | number,
-    allowedActions: ActionTypeName[]
-  ): Promise<string> {
-    const mask = maskFor(allowedActions);
+  async registerAgent(args: RegisterAgentArgs): Promise<string> {
+    const mask = maskFor(args.allowedActions);
+    const windowSeconds = new BN(args.windowSeconds ?? 0);
+    const maxPerWindow = args.maxPerWindow ?? 0;
     return this.program.methods
-      .registerAgent(name, new BN(maxValueLamports), mask)
+      .registerAgent(
+        args.name,
+        new BN(args.maxValueLamports),
+        mask,
+        windowSeconds,
+        maxPerWindow,
+        args.policyAuthority ?? null
+      )
       .accounts({ authority: this.authority() })
       .rpc();
   }
 
   async submitIntent(
-    action: ActionTypeName,
-    valueLamports: BN | number
+    args: SubmitIntentArgs
   ): Promise<{ tx: string; intent: PublicKey; seq: BN }> {
+    if (args.action === "Transfer" && !args.recipient) {
+      throw new Error("submitIntent: Transfer intents require a recipient");
+    }
     const agent = this.agentPda();
     const agentAccount = await this.program.account.agentAccount.fetch(agent);
     const seq = agentAccount.intentCount as BN;
     const [intent] = intentPda(agent, seq, this.programId);
 
     const tx = await this.program.methods
-      .submitIntent(ActionVariant[action], new BN(valueLamports))
+      .submitIntent(
+        ActionVariant[args.action],
+        new BN(args.valueLamports),
+        args.recipient ?? null
+      )
       .accounts({ authority: this.authority() })
       .rpc();
 
     return { tx, intent, seq };
   }
 
+  /**
+   * Execute an approved intent. The recipient is looked up from the on-chain
+   * intent if not provided, so callers usually just pass `seq`.
+   */
   async executeIntent(
-    seq: BN | number
+    seq: BN | number,
+    recipient?: PublicKey
   ): Promise<{ tx: string; receipt: PublicKey }> {
     const agent = this.agentPda();
     const [intent] = intentPda(agent, seq, this.programId);
     const [receipt] = receiptPda(agent, seq, this.programId);
+    const vault = this.vaultPda(agent);
+
+    let to = recipient;
+    if (!to) {
+      const intentAcc = await this.program.account.intentRequest.fetch(intent);
+      to = intentAcc.recipient as PublicKey;
+    }
 
     const tx = await this.program.methods
       .executeIntent()
-      .accounts({
+      .accountsPartial({
         intentRequest: intent,
-        agent: agent,
+        agent,
+        agentAccount: agent,
+        vault,
+        recipient: to,
         executionReceipt: receipt,
         authority: this.authority(),
       })
       .rpc();
 
     return { tx, receipt };
+  }
+
+  /**
+   * Replace the agent's risk policy. Must be signed by the agent's
+   * `policy_authority`. Pass that keypair as the second argument when it
+   * differs from the wallet on this client.
+   */
+  async updatePolicy(
+    args: UpdatePolicyArgs,
+    policyAuthority?: Keypair
+  ): Promise<string> {
+    const agent = this.agentPda();
+    const signerKey = policyAuthority?.publicKey ?? this.authority();
+    const builder = this.program.methods
+      .updatePolicy(
+        new BN(args.maxValueLamports),
+        maskFor(args.allowedActions),
+        new BN(args.windowSeconds),
+        args.maxPerWindow
+      )
+      .accounts({
+        agentAccount: agent,
+        policyAuthority: signerKey,
+      });
+
+    if (policyAuthority) {
+      return builder.signers([policyAuthority]).rpc();
+    }
+    return builder.rpc();
+  }
+
+  /** Fund the agent's vault PDA with `lamports` from the wallet. */
+  async fundVault(lamports: BN | number): Promise<string> {
+    const vault = this.vaultPda();
+    const tx = new Transaction().add(
+      SystemProgram.transfer({
+        fromPubkey: this.authority(),
+        toPubkey: vault,
+        lamports: BigInt(new BN(lamports).toString()),
+      })
+    );
+    return this.provider.sendAndConfirm(tx);
+  }
+
+  async vaultBalance(agent: PublicKey = this.agentPda()): Promise<number> {
+    return this.connection.getBalance(this.vaultPda(agent));
   }
 
   // ── reads ─────────────────────────────────────────────────────────────────
