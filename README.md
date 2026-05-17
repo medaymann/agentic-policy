@@ -4,73 +4,107 @@
 
 ## What is Basira?
 
-AI agents on Solana can already transact. What they cannot do is prove 
+AI agents on Solana can already transact. What they cannot do is prove
 they should have.
 
-Basira is the trust and policy enforcement layer that sits between an 
-agent receiving a task and an agent executing it. Every action is 
-validated against a configurable policy engine before it touches the 
-chain. Every execution produces an immutable onchain receipt that proves 
-what happened, when, and why it was allowed.
+Basira is the trust and policy enforcement layer that sits between an
+agent receiving a task and an agent executing it. Every action is
+validated against a configurable on-chain policy engine before it touches
+the chain. Every execution produces an immutable on-chain receipt that
+proves what happened, when, and why it was allowed.
 
-No more black-box agent decisions. No more unauditable autonomous 
+No more black-box agent decisions. No more unauditable autonomous
 transactions. Just provable, policy-gated execution.
-
-## The Problem
-
-Current agent deployments on Solana have no enforcement layer between 
-intent and execution:
-
-- Agents execute with full wallet access and no policy guardrails
-- There is no onchain record of why an action was approved
-- High-risk actions — treasury moves, contract interactions, 
-  cross-program calls — are indistinguishable from routine ones
-
-Existing solutions use static rules. Static rules only catch what
-you anticipated. Basira handles everything else.
-
-## How It Works
-Every step is logged. Every decision is verifiable. 
-No execution without a valid trust signal.
 
 ## Architecture
 
 | Layer | Purpose |
 |---|---|
-| Policy Engine | Configurable onchain rules — value thresholds, program whitelists, action types |
-| Trust Validator | Evaluates agent actions against active policies |
-| Attestation Layer | Writes machine-readable approval/rejection onchain |
-| Guard Program | Blocks execution unless a valid attestation exists |
-| SDK | TypeScript + Rust integration for agent developers |
+| Policy Engine (on-chain) | Configurable rules — value thresholds, action whitelists |
+| Trust Validator (in-program) | Evaluates each `submit_intent` against the active policy |
+| Execution Receipt | Immutable on-chain proof that an approved intent ran |
+| Guard | Blocks `execute_intent` unless the intent is in `Approved` state |
+| SDK | TypeScript wrapper around the program (used by CLI + web demo) |
+| Demo | CLI walkthrough + web UI |
 
-## Deployed Program
-
-| Network | Address |
-|---|---|
-| Devnet | `coming soon` |
-| Mainnet | `coming soon` |
-
-## Repo Structure
+## Repo layout
 
 ```
-programs/basira/     # On-chain program — AgentAccount, IntentRequest, ExecutionReceipt
-tests/basira.ts      # End-to-end test scenarios (approve, reject by value, reject by action)
-docs/                # Architecture notes
-Anchor.toml          # Anchor workspace config
+programs/basira/   # Anchor program — AgentAccount, IntentRequest, ExecutionReceipt
+sdk/src/           # TypeScript SDK wrapping the program
+demo/run.ts        # End-to-end CLI walkthrough (5 scenarios)
+web/               # Express server + static UI for live demoing
+tests/basira.ts    # Anchor test suite (5 passing scenarios)
 ```
 
-## Quick Start
+## Quick start — full demo in 4 commands
+
+Requires: `anchor` 0.32+, `solana` CLI, `node` 20+, `yarn`.
 
 ```bash
-git clone https://github.com/BasiraAI/BasiraAI
-cd BasiraAI
+# 1. install deps + build the program
 yarn install
+anchor build
+
+# 2. start a local validator (in another terminal, or background it)
+solana-test-validator --reset
+
+# 3. fund the keypair and deploy
+solana airdrop 100 -u http://127.0.0.1:8899 -k ~/.config/solana/id.json
+anchor deploy --provider.cluster localnet
+
+# 4. run the scripted CLI demo
+yarn demo
+```
+
+You'll see five scenarios run live against the chain:
+
+1. Register an agent + on-chain risk policy
+2. In-policy transfer → **APPROVED** → executed → on-chain receipt
+3. Over-limit transfer → **REJECTED** (`value exceeds policy limit`)
+4. Forbidden action → **REJECTED** (`action type not permitted`)
+5. Attempt to execute the rejected intent → blocked by `IntentNotApproved`
+
+## Web demo
+
+After steps 1-3 above:
+
+```bash
+yarn web
+# → http://localhost:4000
+```
+
+The UI shows the agent and its policy, lets you submit arbitrary intents,
+auto-executes approved ones, and lists all on-chain intents and receipts
+in real time. Each row links out to Solana Explorer.
+
+## Test the program
+
+```bash
 anchor test
 ```
 
-Both scenarios run against a local validator:
-- **Approved**: transfer within value + action limits → ExecutionReceipt written
-- **Rejected**: value exceeded or action type not permitted → receipt with rejection reason
+Runs the suite against an ephemeral validator. Five scenarios, all green.
+
+## Targeting devnet
+
+The program ID is the same on every cluster (`2oYHgAYscSG4JvQcKcUq4oFGsDFU2SRBtFYFnHxpzgtu`).
+After deploying with `anchor deploy --provider.cluster devnet`:
+
+```bash
+yarn demo:devnet
+yarn web:devnet
+```
+
+## On-chain accounts
+
+| Account | Purpose |
+|---|---|
+| `AgentAccount` | Agent identity + inline `RiskPolicy` (max value, allowed-actions bitmask). One per authority — PDA seeded `["agent", authority]`. |
+| `IntentRequest` | A proposed action. Status is `Approved` or `Rejected` *before the instruction returns*. PDA seeded `["intent", agent, seq_le]`. |
+| `ExecutionReceipt` | Immutable proof an approved intent ran. PDA seeded `["receipt", agent, seq_le]`. |
+
+Events: `AgentRegistered`, `IntentEvaluated`, `ReceiptWritten`.
 
 ## Built On
 

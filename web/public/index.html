@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Basira — Trust Layer for Agentic Solana</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <header>
+    <div class="logo">
+      <span class="brand">basira</span>
+      <span class="tagline">trust layer for agentic solana</span>
+    </div>
+    <div class="env" id="env"></div>
+  </header>
+
+  <main>
+    <section class="card" id="agent-card">
+      <h2>Agent</h2>
+      <div id="agent-body"><div class="muted">loading…</div></div>
+    </section>
+
+    <section class="card">
+      <h2>Submit Intent</h2>
+      <p class="muted">
+        The on-chain policy engine evaluates every submitted intent. Approved
+        intents can be executed — and the execution writes an immutable
+        on-chain receipt.
+      </p>
+      <form id="intent-form">
+        <label>
+          Action
+          <select name="action">
+            <option value="Transfer">Transfer</option>
+            <option value="Swap">Swap</option>
+            <option value="Stake">Stake</option>
+            <option value="ContractCall">ContractCall</option>
+          </select>
+        </label>
+        <label>
+          Value (SOL)
+          <input name="value" type="number" min="0" step="0.1" value="1" />
+        </label>
+        <label class="check">
+          <input name="autoExecute" type="checkbox" checked />
+          auto-execute if approved
+        </label>
+        <button type="submit" id="submit-btn">submit</button>
+      </form>
+      <div id="last-result"></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Intents</h2>
+      <div id="intents"><div class="muted">no intents yet</div></div>
+    </section>
+
+    <section class="card wide">
+      <h2>Execution Receipts</h2>
+      <p class="muted">
+        Immutable on-chain proof. One receipt per executed intent.
+      </p>
+      <div id="receipts"><div class="muted">no receipts yet</div></div>
+    </section>
+  </main>
+
+  <footer>
+    <span>program <code id="program-id">…</code></span>
+    <span>payer <code id="payer">…</code></span>
+    <span>balance <code id="balance">…</code></span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
