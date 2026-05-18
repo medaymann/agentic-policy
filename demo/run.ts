@@ -2,14 +2,15 @@
  * Basira end-to-end demo.
  *
  * Walks an audience through:
- *   1. Registering an agent with a risk policy + rate limit + separate
- *      policy authority
+ *   1. Registering an agent with a *rule list* policy + separate policy
+ *      authority
  *   2. In-policy Transfer → APPROVED → executed → real SOL moves via CPI
- *   3. Over-limit Transfer → REJECTED
- *   4. Forbidden action → REJECTED
+ *   3. Over-limit Transfer → REJECTED (rule 0)
+ *   4. Forbidden action → REJECTED (rule 1)
  *   5. Attempting to execute the rejected intent → blocked
- *   6. Rate limit trips on the Nth in-policy intent
- *   7. update_policy signed by the separate policy_authority
+ *   6. Rate limit (rule 2) trips on the Nth in-policy intent
+ *   7. replace_policy signed by the separate policy_authority — adds a
+ *      second RatePerWindow rule and tightens allowed actions
  *
  * Usage:
  *   yarn demo                  # localnet (default)
@@ -24,8 +25,11 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   BasiraClient,
   ActionTypeName,
-  actionsFromMask,
+  DecodedRule,
+  Rule,
+  RuleArg,
   statusName,
+  summarizeRule,
   rpcUrlForCluster,
   defaultKeypairPath,
 } from "../sdk/src";
@@ -65,10 +69,10 @@ async function pause(ms: number) {
   await new Promise((r) => setTimeout(r, ms));
 }
 
-/**
- * Load or create a persistent demo policy-authority keypair so we can sign
- * `update_policy` with a key distinct from the agent's authority across runs.
- */
+function printRules(rules: DecodedRule[]) {
+  rules.forEach((r, i) => tag.info(`rule ${i}: ${summarizeRule(r)}`));
+}
+
 function loadOrCreatePolicyAuthority(): Keypair {
   const p = path.join(process.cwd(), ".basira-demo-policy-authority.json");
   if (fs.existsSync(p)) {
@@ -109,25 +113,35 @@ async function main() {
     process.exit(1);
   }
 
-  const RATE_LIMIT_MAX = 3;
-  const RATE_LIMIT_WINDOW_S = 60;
+  const RATE_MAX = 3;
+  const RATE_WINDOW_S = 60;
+
+  const initialRules: RuleArg[] = [
+    Rule.maxValue(new BN(5 * SOL)),                  // rule 0
+    Rule.allowedActions(["Transfer", "Swap"]),       // rule 1
+    Rule.ratePerWindow(new BN(RATE_WINDOW_S), RATE_MAX), // rule 2
+  ];
 
   // ── Step 1: register agent (idempotent) ────────────────────────────────────
 
-  tag.step(1, "Register an agent + on-chain risk policy");
+  tag.step(1, "Register an agent with a rule-list policy");
   tag.info(`agent name:        "demo-agent"`);
-  tag.info(`max value:         ${chalk.yellow("5 SOL")}`);
-  tag.info(`allowed actions:   ${chalk.yellow("Transfer, Swap")}`);
-  tag.info(
-    `rate limit:        ${chalk.yellow(
-      `${RATE_LIMIT_MAX} approved intents / ${RATE_LIMIT_WINDOW_S}s`
-    )}`
-  );
   tag.info(
     `policy authority:  ${chalk.yellow(
       policyAuthority.publicKey.toBase58().slice(0, 8) + "…"
     )} (separate from agent authority)`
   );
+  tag.info(chalk.bold("rule list:"));
+  initialRules.forEach((r, i) => {
+    // decode each rule on the fly for display before we even fetch from chain.
+    const key = Object.keys(r)[0];
+    let summary = "";
+    if (key === "maxValue") summary = `Max ${fmtSol((r as any).maxValue.lamports as BN)} per intent`;
+    else if (key === "allowedActions") summary = `Allowed actions: mask=${(r as any).allowedActions.mask}`;
+    else if (key === "ratePerWindow")
+      summary = `${(r as any).ratePerWindow.max} approved / ${(r as any).ratePerWindow.windowSeconds.toString()}s`;
+    tag.info(`  rule ${i}: ${summary}`);
+  });
 
   const existing = await client.fetchAgentOrNull();
   if (existing) {
@@ -137,27 +151,23 @@ async function main() {
   } else {
     const tx = await client.registerAgent({
       name: "demo-agent",
-      maxValueLamports: new BN(5 * SOL),
-      allowedActions: ["Transfer", "Swap"],
-      windowSeconds: RATE_LIMIT_WINDOW_S,
-      maxPerWindow: RATE_LIMIT_MAX,
+      rules: initialRules,
       policyAuthority: policyAuthority.publicKey,
     });
     tag.ok(`agent registered — tx ${shortAddr({ toBase58: () => tx })}`);
-    tag.info(`agent PDA: ${client.agentPda().toBase58()}`);
+    tag.info(`agent PDA:  ${client.agentPda().toBase58()}`);
+    tag.info(`policy PDA: ${client.policyPda().toBase58()}`);
   }
 
-  // ── Setup: reset policy + rate-limit window so demo is deterministic ─────
+  // ── Setup: reset policy + rate-limit counters via replace_policy ─────────
 
-  tag.setup("Reset policy & rate-limit counters via update_policy");
+  tag.setup("Reset policy & rate-limit counters via replace_policy");
   const agentBefore = await client.fetchAgent();
-  const oldAuthority = (agentBefore.policyAuthority as PublicKey).toBase58();
+  const onchainPa = (agentBefore.policyAuthority as PublicKey).toBase58();
 
-  // If the persisted agent was registered with a different policy authority
-  // (e.g. from an older demo run), we can't reset it — bail out clearly.
-  if (oldAuthority !== policyAuthority.publicKey.toBase58()) {
+  if (onchainPa !== policyAuthority.publicKey.toBase58()) {
     tag.bad(
-      `agent's policy_authority is ${oldAuthority.slice(0, 8)}… but this run holds ${policyAuthority.publicKey
+      `agent's policy_authority is ${onchainPa.slice(0, 8)}… but this run holds ${policyAuthority.publicKey
         .toBase58()
         .slice(0, 8)}…`
     );
@@ -167,7 +177,7 @@ async function main() {
     process.exit(1);
   }
 
-  // Fund the policy authority itself so it can pay rent for the policy update tx.
+  // Fund the policy authority so it can pay its own tx fees.
   const paBalance = await client.connection.getBalance(
     policyAuthority.publicKey
   );
@@ -181,15 +191,7 @@ async function main() {
     tag.info(`funded policy authority with 0.05 SOL for tx fees`);
   }
 
-  await client.updatePolicy(
-    {
-      maxValueLamports: new BN(5 * SOL),
-      allowedActions: ["Transfer", "Swap"],
-      windowSeconds: RATE_LIMIT_WINDOW_S,
-      maxPerWindow: RATE_LIMIT_MAX,
-    },
-    policyAuthority
-  );
+  await client.replacePolicy({ rules: initialRules }, policyAuthority);
   tag.ok(`policy reset — rate-limit window started fresh`);
 
   // ── Setup: fund the vault PDA so executions can move real SOL ────────────
@@ -266,16 +268,16 @@ async function main() {
 
   await pause(400);
 
-  // ── Step 3: over-limit Transfer → REJECTED ──────────────────────────────
+  // ── Step 3: over-limit Transfer → rule 0 fires ───────────────────────────
 
-  tag.step(3, "Over-limit transfer → REJECTED (value > policy max)");
+  tag.step(3, "Over-limit transfer → REJECTED by rule 0 (MaxValue)");
   await submitAndReport("Transfer", 10, Keypair.generate().publicKey);
 
   await pause(400);
 
-  // ── Step 4: forbidden action → REJECTED ─────────────────────────────────
+  // ── Step 4: forbidden action → rule 1 fires ──────────────────────────────
 
-  tag.step(4, "Forbidden action → REJECTED (action not in policy)");
+  tag.step(4, "Forbidden action → REJECTED by rule 1 (AllowedActions)");
   const rejected = await submitAndReport("ContractCall", 1, null);
   if (rejected.status !== "Rejected") {
     throw new Error("expected step 4 to be Rejected");
@@ -287,8 +289,6 @@ async function main() {
 
   tag.step(5, "Try to execute the rejected intent → blocked");
   try {
-    // Pass any real recipient; the on-chain status check fires before
-    // anything reads from the recipient account.
     await client.executeIntent(rejected.seq, Keypair.generate().publicKey);
     tag.bad("expected execution to fail, but it succeeded");
   } catch (e: any) {
@@ -301,19 +301,25 @@ async function main() {
 
   await pause(400);
 
-  // ── Step 6: rate limit trips ─────────────────────────────────────────────
+  // ── Step 6: rate limit trips → rule 2 fires ──────────────────────────────
 
   tag.step(6, "Rate limit trips after N approved intents in the window");
-  // We've already used 1 approved intent in step 2 (the rate-limit counter
-  // resets on the update_policy in Setup). Submit until we either trip the
-  // limit or hit a safety guard.
+  // We've already burned 1 approved intent in step 2. The window resets on
+  // replace_policy in Setup, so we have RATE_MAX-1 left before the trip.
   let tripped = false;
-  for (let i = 0; i < RATE_LIMIT_MAX + 2 && !tripped; i++) {
-    const r = await submitAndReport("Transfer", 0.1, Keypair.generate().publicKey);
-    if (r.status === "Rejected" && r.intentAccount.rejectionReason === "rate limit exceeded") {
+  for (let i = 0; i < RATE_MAX + 2 && !tripped; i++) {
+    const r = await submitAndReport(
+      "Transfer",
+      0.1,
+      Keypair.generate().publicKey
+    );
+    if (
+      r.status === "Rejected" &&
+      (r.intentAccount.rejectionReason ?? "").includes("rate limit exceeded")
+    ) {
       tripped = true;
       tag.ok(
-        `${chalk.bold("rate limit fired")} after ${RATE_LIMIT_MAX} approved intents in window`
+        `${chalk.bold("rule 2 fired")} after ${RATE_MAX} approved intents`
       );
     }
   }
@@ -323,40 +329,27 @@ async function main() {
 
   await pause(400);
 
-  // ── Step 7: update_policy signed by the separate policy authority ───────
+  // ── Step 7: replace_policy signed by the separate policy authority ───────
 
-  tag.step(7, "update_policy signed by the policy_authority (not the agent)");
-  const before = await client.fetchAgent();
-  tag.info(
-    `before: max=${fmtSol(
-      before.policy.maxValueLamports as BN
-    )} actions=[${actionsFromMask(
-      before.policy.allowedActionsMask as number
-    ).join(", ")}] window=${(
-      before.policy.windowSeconds as BN
-    ).toString()}s/${before.policy.maxPerWindow}`
-  );
+  tag.step(7, "replace_policy by the policy_authority (not the agent)");
+  const beforeRules = await client.fetchRules();
+  tag.info(chalk.bold("before:"));
+  printRules(beforeRules);
 
-  await client.updatePolicy(
-    {
-      maxValueLamports: new BN(2 * SOL),
-      allowedActions: ["Transfer"],
-      windowSeconds: 0,
-      maxPerWindow: 0,
-    },
-    policyAuthority
-  );
+  // New policy: tighter MaxValue, only Transfer allowed, AND two
+  // RatePerWindow rules (one fast, one slow) — demonstrating that the rule
+  // list can contain multiple instances of the same rule type.
+  const newRules: RuleArg[] = [
+    Rule.maxValue(new BN(2 * SOL)),
+    Rule.allowedActions(["Transfer"]),
+    Rule.ratePerWindow(new BN(10), 2),     // 2 per 10s (tight)
+    Rule.ratePerWindow(new BN(3600), 50),  // 50 per hour (loose)
+  ];
+  await client.replacePolicy({ rules: newRules }, policyAuthority);
 
-  const after = await client.fetchAgent();
-  tag.info(
-    `after:  max=${fmtSol(
-      after.policy.maxValueLamports as BN
-    )} actions=[${actionsFromMask(
-      after.policy.allowedActionsMask as number
-    ).join(", ")}] window=${(
-      after.policy.windowSeconds as BN
-    ).toString()}s/${after.policy.maxPerWindow}`
-  );
+  const afterRules = await client.fetchRules();
+  tag.info(chalk.bold("after:"));
+  printRules(afterRules);
   tag.ok(
     `policy updated by ${chalk.bold(
       shortAddr(policyAuthority.publicKey).toString()
@@ -369,20 +362,17 @@ async function main() {
   tag.hdr(" SUMMARY ");
 
   const agent = await client.fetchAgent();
+  const policy = await client.fetchPolicy();
+  const rules = await client.fetchRules();
   const intents = await client.listIntents();
   const receipts = await client.listReceipts();
 
   console.log(
     `  agent:    ${chalk.bold(agent.name)}  (${shortAddr(client.agentPda())})`
   );
-  console.log(
-    `  policy:   max=${fmtSol(
-      agent.policy.maxValueLamports as BN
-    )} actions=[${actionsFromMask(
-      agent.policy.allowedActionsMask as number
-    ).join(", ")}] window=${(
-      agent.policy.windowSeconds as BN
-    ).toString()}s/${agent.policy.maxPerWindow}`
+  console.log(`  policy:   version ${policy.version}  ·  ${rules.length} rules`);
+  rules.forEach((r, i) =>
+    console.log(`            rule ${i}: ${summarizeRule(r)}`)
   );
   console.log(
     `  vault:    ${fmtSol(await client.vaultBalance())} (${shortAddr(
