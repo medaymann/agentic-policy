@@ -11,6 +11,7 @@ const fmtTs = (ts) => {
 };
 
 const SYSTEM_PROGRAM = "11111111111111111111111111111111";
+const ALL_ACTIONS = ["Transfer", "Swap", "Stake", "ContractCall"];
 
 let cluster = "localnet";
 
@@ -32,18 +33,13 @@ function explorerLink(kind, value) {
   return `${base}?cluster=${cluster}`;
 }
 
-// Generate a random pubkey-shaped string by creating a random Ed25519
-// keypair via the SubtleCrypto + base58 encoder we ship below. Used only
-// to populate the recipient field with a fresh demo address.
+// Random pubkey-shaped string for the recipient field.
 async function randomPubkeyB58() {
-  // Generate 32 random bytes and base58-encode. Not a real keypair (we never
-  // need the private key here), just a plausible-looking system-owned address.
   const bytes = new Uint8Array(32);
   crypto.getRandomValues(bytes);
   return b58encode(bytes);
 }
 
-// Tiny base58 encoder (Bitcoin alphabet).
 const B58_ALPHA = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 function b58encode(bytes) {
   if (bytes.length === 0) return "";
@@ -59,6 +55,159 @@ function b58encode(bytes) {
   }
   return B58_ALPHA[0].repeat(zeros) + out;
 }
+
+// ── rule builder ──────────────────────────────────────────────────────────────
+
+// In-memory model for the policy builder, edited by the UI before "save".
+// Each item is one of:
+//   { type: "MaxValue", lamports: "1000000000" }       (string-encoded lamports)
+//   { type: "AllowedActions", actions: ["Transfer"] }
+//   { type: "RatePerWindow", windowSeconds: 60, max: 3 }
+let pendingRules = [];
+
+function defaultRule(type) {
+  switch (type) {
+    case "MaxValue":
+      return { type: "MaxValue", lamports: String(1_000_000_000) };
+    case "AllowedActions":
+      return { type: "AllowedActions", actions: ["Transfer"] };
+    case "RatePerWindow":
+      return { type: "RatePerWindow", windowSeconds: 60, max: 3 };
+  }
+  throw new Error(`unknown rule type ${type}`);
+}
+
+function rulesFromAgent(agent) {
+  if (!agent.policy || !agent.policy.rules) return [];
+  return agent.policy.rules.map((r) => {
+    switch (r.type) {
+      case "MaxValue":
+        return { type: "MaxValue", lamports: r.lamports };
+      case "AllowedActions":
+        return { type: "AllowedActions", actions: r.actions.slice() };
+      case "RatePerWindow":
+        return {
+          type: "RatePerWindow",
+          windowSeconds: r.windowSeconds,
+          max: r.max,
+        };
+      default:
+        return null;
+    }
+  }).filter(Boolean);
+}
+
+function renderRuleBuilder() {
+  const root = $("#rules-builder");
+  if (pendingRules.length === 0) {
+    root.innerHTML = `<div class="muted rule-empty">no rules yet — add at least one before saving</div>`;
+    return;
+  }
+  root.innerHTML = pendingRules
+    .map((rule, i) => {
+      let body = "";
+      if (rule.type === "MaxValue") {
+        const sol = Number(rule.lamports) / 1_000_000_000;
+        body = `
+          <label>
+            Limit (SOL)
+            <input type="number" min="0" step="0.1" value="${sol}" data-rule-field="lamports-sol" />
+          </label>
+        `;
+      } else if (rule.type === "AllowedActions") {
+        body = `<div class="rule-checks">
+          ${ALL_ACTIONS.map(
+            (a) =>
+              `<label class="check"><input type="checkbox" data-rule-action="${a}" ${
+                rule.actions.includes(a) ? "checked" : ""
+              } /> ${a}</label>`
+          ).join("")}
+        </div>`;
+      } else if (rule.type === "RatePerWindow") {
+        body = `
+          <label>
+            Window (s)
+            <input type="number" min="0" step="1" value="${rule.windowSeconds}" data-rule-field="windowSeconds" />
+          </label>
+          <label>
+            Max
+            <input type="number" min="0" step="1" value="${rule.max}" data-rule-field="max" />
+          </label>
+        `;
+      }
+      return `
+        <div class="rule-row" data-rule-index="${i}">
+          <div class="rule-header">
+            <span class="rule-tag">rule ${i}</span>
+            <span class="rule-type">${rule.type}</span>
+            <button type="button" class="rule-remove" data-remove="${i}">remove</button>
+          </div>
+          <div class="rule-body">${body}</div>
+        </div>
+      `;
+    })
+    .join("");
+
+  // wire field inputs
+  root.querySelectorAll(".rule-row").forEach((row) => {
+    const i = Number(row.dataset.ruleIndex);
+    const rule = pendingRules[i];
+    row.querySelectorAll("input[data-rule-field]").forEach((input) => {
+      input.addEventListener("input", () => {
+        const field = input.dataset.ruleField;
+        if (field === "lamports-sol") {
+          const sol = Number(input.value);
+          rule.lamports = String(Math.floor(sol * 1_000_000_000));
+        } else if (field === "windowSeconds") {
+          rule.windowSeconds = Number(input.value);
+        } else if (field === "max") {
+          rule.max = Number(input.value);
+        }
+      });
+    });
+    row.querySelectorAll("input[data-rule-action]").forEach((cb) => {
+      cb.addEventListener("change", () => {
+        const a = cb.dataset.ruleAction;
+        if (cb.checked && !rule.actions.includes(a)) rule.actions.push(a);
+        else if (!cb.checked) rule.actions = rule.actions.filter((x) => x !== a);
+      });
+    });
+    row.querySelector(".rule-remove").addEventListener("click", () => {
+      pendingRules.splice(i, 1);
+      renderRuleBuilder();
+    });
+  });
+}
+
+$("#add-rule-btn").addEventListener("click", () => {
+  const type = $("#add-rule-type").value;
+  pendingRules.push(defaultRule(type));
+  renderRuleBuilder();
+});
+
+$("#save-policy-btn").addEventListener("click", async () => {
+  const btn = $("#save-policy-btn");
+  const result = $("#policy-result");
+  btn.disabled = true;
+  btn.textContent = "saving…";
+  result.textContent = "";
+  try {
+    if (pendingRules.length === 0) throw new Error("add at least one rule");
+    const r = await api("/api/agent/policy", {
+      method: "POST",
+      body: JSON.stringify({ rules: pendingRules }),
+    });
+    result.innerHTML = `<span class="result-ok">policy saved · tx <code>${shortAddr(
+      r.tx
+    )}</code></span>`;
+    await refresh();
+  } catch (e) {
+    result.innerHTML = `<span class="result-bad">error: ${e.message}</span>`;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "save policy";
+  }
+});
 
 // ── status / footer ───────────────────────────────────────────────────────────
 
@@ -87,36 +236,25 @@ async function loadAgent() {
   if (!agent.exists) {
     el.innerHTML = `
       <div class="muted">No agent registered for this authority yet.</div>
+      <p class="muted-sm">Build a rule list in the <strong>Policy Rules</strong> panel below, then click <em>register agent</em>.</p>
       <form id="register-form">
         <label>Name<input name="name" value="demo-agent" /></label>
-        <label>Max value (SOL)<input name="maxValueSol" type="number" min="0.1" step="0.1" value="5" /></label>
-        <label>Window seconds<input name="windowSeconds" type="number" min="0" step="1" value="60" /></label>
-        <label>Max per window<input name="maxPerWindow" type="number" min="0" step="1" value="3" /></label>
-        <label class="check"><input type="checkbox" name="Transfer" checked /> Transfer</label>
-        <label class="check"><input type="checkbox" name="Swap" checked /> Swap</label>
-        <label class="check"><input type="checkbox" name="Stake" /> Stake</label>
-        <label class="check"><input type="checkbox" name="ContractCall" /> ContractCall</label>
         <button type="submit">register agent</button>
       </form>
     `;
     $("#register-form").addEventListener("submit", async (ev) => {
       ev.preventDefault();
       const form = ev.target;
-      const allowedActions = [
-        "Transfer",
-        "Swap",
-        "Stake",
-        "ContractCall",
-      ].filter((a) => form.elements[a].checked);
+      if (pendingRules.length === 0) {
+        alert("add at least one rule first");
+        return;
+      }
       try {
         await api("/api/agent/register", {
           method: "POST",
           body: JSON.stringify({
             name: form.elements.name.value,
-            maxValueSol: Number(form.elements.maxValueSol.value),
-            allowedActions,
-            windowSeconds: Number(form.elements.windowSeconds.value),
-            maxPerWindow: Number(form.elements.maxPerWindow.value),
+            rules: pendingRules,
           }),
         });
         await refresh();
@@ -124,13 +262,34 @@ async function loadAgent() {
         alert("register failed: " + e.message);
       }
     });
+
+    // For first-time use, seed the builder with a sensible starter set so the
+    // user can hit "register agent" right away.
+    if (pendingRules.length === 0) {
+      pendingRules = [
+        defaultRule("MaxValue"),
+        defaultRule("AllowedActions"),
+        defaultRule("RatePerWindow"),
+      ];
+      renderRuleBuilder();
+    }
     return;
   }
 
-  const rateLimitLine =
-    agent.windowSeconds > 0
-      ? `${agent.countInWindow} / ${agent.maxPerWindow} in current ${agent.windowSeconds}s window`
-      : `disabled`;
+  // Existing agent — render summary + sync the builder with on-chain rules.
+  const rules = (agent.policy && agent.policy.rules) || [];
+  const rulesHtml = rules.length
+    ? `<ol class="rule-summary">
+         ${rules.map((r) => `<li>${r.summary}</li>`).join("")}
+       </ol>`
+    : `<div class="muted">no policy</div>`;
+
+  const windowSummary =
+    agent.windows && agent.windows.length
+      ? agent.windows
+          .map((w) => `rule ${w.ruleIndex}: ${w.count} in window`)
+          .join(" · ")
+      : "no rate-limit windows";
 
   el.innerHTML = `
     <div class="kv">
@@ -152,21 +311,16 @@ async function loadAgent() {
         · ${fmtSol(agent.vaultBalanceSol)}
         <button id="fund-btn" class="inline">+ fund 1 SOL</button>
       </div>
-      <div class="k">policy max</div><div class="v">${fmtSol(
-        agent.maxValueSol
-      )} per intent</div>
-      <div class="k">rate limit</div><div class="v">${rateLimitLine}</div>
+      <div class="k">policy</div><div class="v">${
+        agent.policy
+          ? `v${agent.policy.version} · ${rules.length} rule${
+              rules.length === 1 ? "" : "s"
+            }`
+          : "—"
+      }</div>
+      <div class="k">rules</div><div class="v">${rulesHtml}</div>
+      <div class="k">rate state</div><div class="v muted-sm">${windowSummary}</div>
       <div class="k">intents</div><div class="v">${agent.intentCount}</div>
-    </div>
-    <div class="policy-row">
-      ${["Transfer", "Swap", "Stake", "ContractCall"]
-        .map(
-          (a) =>
-            `<span class="tag ${
-              agent.allowedActions.includes(a) ? "allow" : ""
-            }">${a}${agent.allowedActions.includes(a) ? " ✓" : ""}</span>`
-        )
-        .join("")}
     </div>
   `;
 
@@ -187,6 +341,15 @@ async function loadAgent() {
       btn.textContent = "+ fund 1 SOL";
     }
   });
+
+  // Sync builder with on-chain rules the first time we see them, so editing
+  // starts from the live policy (not blank). After the user has touched the
+  // builder, leave it alone.
+  if (!loadAgent._initialized) {
+    pendingRules = rulesFromAgent(agent);
+    renderRuleBuilder();
+    loadAgent._initialized = true;
+  }
 }
 
 // ── intents table ─────────────────────────────────────────────────────────────
@@ -357,41 +520,6 @@ $("#intent-form").addEventListener("submit", async (ev) => {
   }
 });
 
-// ── policy update form ────────────────────────────────────────────────────────
-
-$("#policy-form").addEventListener("submit", async (ev) => {
-  ev.preventDefault();
-  const form = ev.target;
-  const btn = $("#policy-btn");
-  const result = $("#policy-result");
-  const allowedActions = ["Transfer", "Swap", "Stake", "ContractCall"].filter(
-    (a) => form.elements[a].checked
-  );
-  btn.disabled = true;
-  btn.textContent = "updating…";
-  result.textContent = "";
-  try {
-    const r = await api("/api/agent/policy", {
-      method: "POST",
-      body: JSON.stringify({
-        maxValueSol: Number(form.elements.maxValueSol.value),
-        windowSeconds: Number(form.elements.windowSeconds.value),
-        maxPerWindow: Number(form.elements.maxPerWindow.value),
-        allowedActions,
-      }),
-    });
-    result.innerHTML = `<span class="result-ok">policy updated · tx <code>${shortAddr(
-      r.tx
-    )}</code></span>`;
-    await refresh();
-  } catch (e) {
-    result.innerHTML = `<span class="result-bad">error: ${e.message}</span>`;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = "update policy";
-  }
-});
-
 // ── refresh loop ──────────────────────────────────────────────────────────────
 
 async function refresh() {
@@ -399,6 +527,7 @@ async function refresh() {
 }
 
 toggleRecipientField();
+renderRuleBuilder();
 refresh().catch((e) => {
   console.error(e);
   $("#agent-body").innerHTML = `<div class="result-bad">api error: ${e.message}<br/><span class="muted">is the validator running and the program deployed?</span></div>`;

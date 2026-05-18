@@ -24,9 +24,9 @@
     <section class="card">
       <h2>Submit Intent</h2>
       <p class="muted">
-        The on-chain policy engine evaluates every submitted intent. Approved
-        Transfer intents execute via a real SystemProgram CPI from the agent's
-        vault PDA — real lamports move.
+        The on-chain policy engine evaluates every submitted intent against the
+        agent's rule list. Approved Transfer intents execute via a real
+        SystemProgram CPI from the agent's vault PDA — real lamports move.
       </p>
       <form id="intent-form">
         <label>
@@ -59,32 +59,24 @@
     </section>
 
     <section class="card wide" id="policy-card">
-      <h2>Update Policy</h2>
+      <h2>Policy Rules</h2>
       <p class="muted">
-        Signed by the agent's <strong>policy authority</strong> — a separate
-        keypair from the agent's signing authority. The agent cannot loosen
-        its own leash.
+        Compose the agent's policy from a menu of rule primitives. Each
+        rule's parameters are yours to pick; the same rule type may appear
+        multiple times (e.g. two rate limits with different windows). Saving
+        is signed by the agent's <strong>policy authority</strong> — a
+        separate keypair from the agent's signing authority.
       </p>
-      <form id="policy-form">
-        <label>
-          Max value (SOL)
-          <input name="maxValueSol" type="number" min="0" step="0.1" value="5" />
-        </label>
-        <label>
-          Window (seconds)
-          <input name="windowSeconds" type="number" min="0" step="1" value="60" />
-          <span class="muted-sm">0 disables rate limit</span>
-        </label>
-        <label>
-          Max per window
-          <input name="maxPerWindow" type="number" min="0" step="1" value="3" />
-        </label>
-        <label class="check"><input type="checkbox" name="Transfer" checked /> Transfer</label>
-        <label class="check"><input type="checkbox" name="Swap" checked /> Swap</label>
-        <label class="check"><input type="checkbox" name="Stake" /> Stake</label>
-        <label class="check"><input type="checkbox" name="ContractCall" /> ContractCall</label>
-        <button type="submit" id="policy-btn">update policy</button>
-      </form>
+      <div id="rules-builder"></div>
+      <div class="rule-actions">
+        <select id="add-rule-type">
+          <option value="MaxValue">Max value per intent</option>
+          <option value="AllowedActions">Allowed actions</option>
+          <option value="RatePerWindow">Rate per window</option>
+        </select>
+        <button type="button" id="add-rule-btn" class="secondary">+ add rule</button>
+        <button type="button" id="save-policy-btn">save policy</button>
+      </div>
       <div id="policy-result"></div>
     </section>
 

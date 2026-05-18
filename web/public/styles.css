@@ -251,14 +251,117 @@ button.inline {
 }
 button.inline:hover { background: var(--line); }
 
-#policy-form {
-  grid-template-columns: 1fr 1fr 1fr;
-}
-#policy-form label.check { grid-column: span 1; }
-#policy-form button { grid-column: span 3; justify-self: end; }
 #policy-result {
   margin-top: 12px;
   font-size: 13px;
+}
+
+/* Rule builder */
+#rules-builder {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 14px;
+}
+.rule-empty {
+  padding: 14px;
+  text-align: center;
+  border: 1px dashed var(--line);
+  border-radius: 6px;
+}
+.rule-row {
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 12px 14px;
+}
+.rule-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+.rule-tag {
+  background: var(--code-bg);
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  padding: 2px 8px;
+  border-radius: 3px;
+}
+.rule-type {
+  font-weight: 600;
+  color: var(--text);
+}
+.rule-remove {
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: auto;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.rule-remove:hover { background: var(--line); color: var(--bad); }
+.rule-body {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+.rule-body label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.rule-body input[type=number] { width: 140px; }
+.rule-checks {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+.rule-checks label.check {
+  flex-direction: row;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+.rule-actions {
+  display: flex;
+  gap: 10px;
+  margin-top: 16px;
+  align-items: center;
+}
+.rule-actions select {
+  flex: 0 0 auto;
+}
+.rule-actions button { padding: 8px 16px; }
+.rule-actions button.secondary {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+}
+.rule-actions button.secondary:hover { background: var(--line); }
+
+/* Inline rule summary inside the agent panel */
+.rule-summary {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+}
+.rule-summary li {
+  margin-bottom: 2px;
 }
 
 @media (max-width: 720px) {
