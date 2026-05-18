@@ -2,9 +2,10 @@
  * Basira SDK — thin wrapper around the on-chain `basira` Anchor program.
  *
  * Exposes the primitives a demo or client needs:
- *   - registerAgent, submitIntent, executeIntent, updatePolicy, fundVault
- *   - PDA derivations (agent, intent, receipt, vault)
- *   - fetch helpers for agents / intents / receipts
+ *   - registerAgent, submitIntent, executeIntent, replacePolicy, fundVault
+ *   - Rule builders for composing rule lists
+ *   - PDA derivations (agent, intent, receipt, vault, policy)
+ *   - fetch helpers for agents / policies / intents / receipts
  */
 
 import * as anchor from "@coral-xyz/anchor";
@@ -64,24 +65,124 @@ export function statusName(status: any): IntentStatusName {
   return (k.charAt(0).toUpperCase() + k.slice(1)) as IntentStatusName;
 }
 
+/** Limits enforced both client-side and on-chain. */
+export const MAX_RULES = 16;
+export const MAX_RATE_WINDOWS = 4;
+
 /** Known program error names — useful for clients that want to detect specific failures. */
 export const BasiraErrorName = {
-  ValueExceedsLimit: "ValueExceedsLimit",
-  ActionNotPermitted: "ActionNotPermitted",
   IntentNotApproved: "IntentNotApproved",
   IntentAlreadyFinalised: "IntentAlreadyFinalised",
-  RateLimitExceeded: "RateLimitExceeded",
   UnauthorizedPolicyUpdate: "UnauthorizedPolicyUpdate",
   UnsupportedActionCpi: "UnsupportedActionCpi",
   RecipientRequired: "RecipientRequired",
   RecipientMismatch: "RecipientMismatch",
+  EmptyPolicy: "EmptyPolicy",
+  TooManyRules: "TooManyRules",
+  TooManyRateWindows: "TooManyRateWindows",
+  NameTooLong: "NameTooLong",
 } as const;
+
+// ── Rule builders ─────────────────────────────────────────────────────────────
+
+/**
+ * Anchor-encoded rule variant: `{ maxValue: { lamports: BN } }`, etc.
+ * Use the `Rule` helpers below instead of constructing these by hand.
+ */
+export type RuleArg =
+  | { maxValue: { lamports: BN } }
+  | { allowedActions: { mask: number } }
+  | { ratePerWindow: { windowSeconds: BN; max: number } };
+
+/** Friendlier shape returned by `decodeRules` — easy to render in a UI. */
+export type DecodedRule =
+  | { type: "MaxValue"; lamports: BN; lamportsSol: number }
+  | { type: "AllowedActions"; mask: number; actions: ActionTypeName[] }
+  | { type: "RatePerWindow"; windowSeconds: number; max: number };
+
+export const Rule = {
+  maxValue: (lamports: BN | number): RuleArg => ({
+    maxValue: { lamports: new BN(lamports) },
+  }),
+  allowedActions: (actions: ActionTypeName[] | number): RuleArg => ({
+    allowedActions: {
+      mask: typeof actions === "number" ? actions : maskFor(actions),
+    },
+  }),
+  ratePerWindow: (windowSeconds: BN | number, max: number): RuleArg => ({
+    ratePerWindow: { windowSeconds: new BN(windowSeconds), max },
+  }),
+};
+
+const SOL_LAMPORTS = 1_000_000_000;
+
+/** Convert the on-chain rule shape into a friendly object. */
+export function decodeRule(raw: any): DecodedRule {
+  const key = Object.keys(raw)[0];
+  const inner = raw[key];
+  switch (key) {
+    case "maxValue": {
+      const lamports = inner.lamports as BN;
+      return {
+        type: "MaxValue",
+        lamports,
+        lamportsSol: lamports.toNumber() / SOL_LAMPORTS,
+      };
+    }
+    case "allowedActions": {
+      const mask = inner.mask as number;
+      return { type: "AllowedActions", mask, actions: actionsFromMask(mask) };
+    }
+    case "ratePerWindow": {
+      const windowSeconds = (inner.windowSeconds as BN).toNumber();
+      const max = inner.max as number;
+      return { type: "RatePerWindow", windowSeconds, max };
+    }
+    default:
+      throw new Error(`unknown rule variant: ${key}`);
+  }
+}
+
+export function decodeRules(raws: any[]): DecodedRule[] {
+  return raws.map(decodeRule);
+}
+
+/** One-line human summary of a rule (for UI display). */
+export function summarizeRule(rule: DecodedRule): string {
+  switch (rule.type) {
+    case "MaxValue":
+      return `Max ${rule.lamportsSol.toFixed(4)} SOL per intent`;
+    case "AllowedActions":
+      return `Allowed actions: ${rule.actions.join(", ") || "(none)"}`;
+    case "RatePerWindow":
+      return `${rule.max} approved intents / ${rule.windowSeconds}s`;
+  }
+}
+
+/** Client-side validation matching the on-chain rules. Throws on failure. */
+export function validateRules(rules: RuleArg[]): void {
+  if (rules.length === 0) throw new Error("rule list is empty");
+  if (rules.length > MAX_RULES)
+    throw new Error(`rule list exceeds MAX_RULES (${MAX_RULES})`);
+  const rateCount = rules.filter((r) => "ratePerWindow" in r).length;
+  if (rateCount > MAX_RATE_WINDOWS)
+    throw new Error(
+      `too many RatePerWindow rules (max ${MAX_RATE_WINDOWS})`
+    );
+}
 
 // ── PDA helpers ───────────────────────────────────────────────────────────────
 
 export function agentPda(authority: PublicKey, programId: PublicKey) {
   return PublicKey.findProgramAddressSync(
     [Buffer.from("agent"), authority.toBuffer()],
+    programId
+  );
+}
+
+export function policyPda(agent: PublicKey, programId: PublicKey) {
+  return PublicKey.findProgramAddressSync(
+    [Buffer.from("policy"), agent.toBuffer()],
     programId
   );
 }
@@ -127,12 +228,7 @@ export interface BasiraClientOpts {
 
 export interface RegisterAgentArgs {
   name: string;
-  maxValueLamports: BN | number;
-  allowedActions: ActionTypeName[];
-  /** Rolling rate-limit window in seconds. 0 disables rate limiting. */
-  windowSeconds?: BN | number;
-  /** Max approved intents per window. Ignored when windowSeconds == 0. */
-  maxPerWindow?: number;
+  rules: RuleArg[];
   /** Separate signer for policy updates. Defaults to the agent's authority. */
   policyAuthority?: PublicKey | null;
 }
@@ -140,15 +236,12 @@ export interface RegisterAgentArgs {
 export interface SubmitIntentArgs {
   action: ActionTypeName;
   valueLamports: BN | number;
-  /** Required for Transfer; ignored (defaults to Pubkey::default) otherwise. */
+  /** Required for Transfer; ignored otherwise. */
   recipient?: PublicKey | null;
 }
 
-export interface UpdatePolicyArgs {
-  maxValueLamports: BN | number;
-  allowedActions: ActionTypeName[];
-  windowSeconds: BN | number;
-  maxPerWindow: number;
+export interface ReplacePolicyArgs {
+  rules: RuleArg[];
 }
 
 export class BasiraClient {
@@ -182,6 +275,10 @@ export class BasiraClient {
     return agentPda(authority, this.programId)[0];
   }
 
+  policyPda(agent: PublicKey = this.agentPda()) {
+    return policyPda(agent, this.programId)[0];
+  }
+
   vaultPda(agent: PublicKey = this.agentPda()) {
     return vaultPda(agent, this.programId)[0];
   }
@@ -189,16 +286,11 @@ export class BasiraClient {
   // ── instructions ──────────────────────────────────────────────────────────
 
   async registerAgent(args: RegisterAgentArgs): Promise<string> {
-    const mask = maskFor(args.allowedActions);
-    const windowSeconds = new BN(args.windowSeconds ?? 0);
-    const maxPerWindow = args.maxPerWindow ?? 0;
+    validateRules(args.rules);
     return this.program.methods
       .registerAgent(
         args.name,
-        new BN(args.maxValueLamports),
-        mask,
-        windowSeconds,
-        maxPerWindow,
+        args.rules as any,
         args.policyAuthority ?? null
       )
       .accounts({ authority: this.authority() })
@@ -264,25 +356,23 @@ export class BasiraClient {
   }
 
   /**
-   * Replace the agent's risk policy. Must be signed by the agent's
-   * `policy_authority`. Pass that keypair as the second argument when it
-   * differs from the wallet on this client.
+   * Replace the agent's rule list. Must be signed by the agent's
+   * `policy_authority`. Pass that keypair when it differs from this client's
+   * wallet.
    */
-  async updatePolicy(
-    args: UpdatePolicyArgs,
+  async replacePolicy(
+    args: ReplacePolicyArgs,
     policyAuthority?: Keypair
   ): Promise<string> {
+    validateRules(args.rules);
     const agent = this.agentPda();
+    const policy = this.policyPda(agent);
     const signerKey = policyAuthority?.publicKey ?? this.authority();
     const builder = this.program.methods
-      .updatePolicy(
-        new BN(args.maxValueLamports),
-        maskFor(args.allowedActions),
-        new BN(args.windowSeconds),
-        args.maxPerWindow
-      )
-      .accounts({
+      .replacePolicy(args.rules as any)
+      .accountsPartial({
         agentAccount: agent,
+        policyAccount: policy,
         policyAuthority: signerKey,
       });
 
@@ -321,6 +411,24 @@ export class BasiraClient {
     } catch {
       return null;
     }
+  }
+
+  async fetchPolicy(agent: PublicKey = this.agentPda()) {
+    return this.program.account.policyAccount.fetch(this.policyPda(agent));
+  }
+
+  async fetchPolicyOrNull(agent: PublicKey = this.agentPda()) {
+    try {
+      return await this.fetchPolicy(agent);
+    } catch {
+      return null;
+    }
+  }
+
+  /** Convenience: return decoded rule list. */
+  async fetchRules(agent: PublicKey = this.agentPda()): Promise<DecodedRule[]> {
+    const policy = await this.fetchPolicy(agent);
+    return decodeRules(policy.rules as any[]);
   }
 
   async fetchIntent(seq: BN | number, agent?: PublicKey) {
