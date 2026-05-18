@@ -220,10 +220,23 @@ export const PROGRAM_ID = new PublicKey(
   "2oYHgAYscSG4JvQcKcUq4oFGsDFU2SRBtFYFnHxpzgtu"
 );
 
+/**
+ * Construction modes:
+ *
+ *   - `wallet` (+ optional `connection`) → bring-your-own signer. Used by
+ *     plugins that wrap a framework whose runtime already owns the wallet.
+ *   - `keypair`                          → wrap a raw Keypair.
+ *   - `keypairPath` / default            → load a keypair from disk
+ *                                          (~/.config/solana/id.json by default).
+ *
+ * When `connection` is supplied it takes precedence over `rpcUrl`.
+ */
 export interface BasiraClientOpts {
-  rpcUrl?: string;          // default: http://127.0.0.1:8899
-  keypairPath?: string;     // default: ~/.config/solana/id.json
-  keypair?: Keypair;        // overrides keypairPath
+  rpcUrl?: string;             // default: http://127.0.0.1:8899
+  connection?: Connection;     // bring-your-own connection (preferred for plugins)
+  wallet?: anchor.Wallet;      // bring-your-own signer (preferred for plugins)
+  keypairPath?: string;        // default: ~/.config/solana/id.json
+  keypair?: Keypair;           // overrides keypairPath
 }
 
 export interface RegisterAgentArgs {
@@ -252,19 +265,33 @@ export class BasiraClient {
   readonly programId: PublicKey;
 
   constructor(opts: BasiraClientOpts = {}) {
-    const rpcUrl = opts.rpcUrl ?? "http://127.0.0.1:8899";
-    this.connection = new Connection(rpcUrl, "confirmed");
+    this.connection =
+      opts.connection ??
+      new Connection(opts.rpcUrl ?? "http://127.0.0.1:8899", "confirmed");
 
-    const kp =
-      opts.keypair ??
-      loadKeypair(opts.keypairPath ?? defaultKeypairPath());
+    if (opts.wallet) {
+      this.wallet = opts.wallet;
+    } else {
+      const kp =
+        opts.keypair ??
+        loadKeypair(opts.keypairPath ?? defaultKeypairPath());
+      this.wallet = new anchor.Wallet(kp);
+    }
 
-    this.wallet = new anchor.Wallet(kp);
     this.provider = new AnchorProvider(this.connection, this.wallet, {
       commitment: "confirmed",
     });
     this.program = new Program<Basira>(idl as Idl as Basira, this.provider);
     this.programId = this.program.programId;
+  }
+
+  /**
+   * Construct a client from a framework-supplied wallet + connection.
+   * Used by the SAK / Eliza plugins so the agent's existing signer drives
+   * Basira instructions.
+   */
+  static fromWallet(wallet: anchor.Wallet, connection: Connection): BasiraClient {
+    return new BasiraClient({ wallet, connection });
   }
 
   authority(): PublicKey {
