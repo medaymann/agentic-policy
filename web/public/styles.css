@@ -236,6 +236,31 @@ footer {
   margin-top: 8px;
 }
 
+form label.full {
+  grid-column: span 3;
+}
+
+button.inline {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 8px;
+}
+button.inline:hover { background: var(--line); }
+
+#policy-form {
+  grid-template-columns: 1fr 1fr 1fr;
+}
+#policy-form label.check { grid-column: span 1; }
+#policy-form button { grid-column: span 3; justify-self: end; }
+#policy-result {
+  margin-top: 12px;
+  font-size: 13px;
+}
+
 @media (max-width: 720px) {
   main { grid-template-columns: 1fr; }
   .card.wide { grid-column: span 1; }

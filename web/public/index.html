@@ -25,8 +25,8 @@
       <h2>Submit Intent</h2>
       <p class="muted">
         The on-chain policy engine evaluates every submitted intent. Approved
-        intents can be executed — and the execution writes an immutable
-        on-chain receipt.
+        Transfer intents execute via a real SystemProgram CPI from the agent's
+        vault PDA — real lamports move.
       </p>
       <form id="intent-form">
         <label>
@@ -40,7 +40,14 @@
         </label>
         <label>
           Value (SOL)
-          <input name="value" type="number" min="0" step="0.1" value="1" />
+          <input name="value" type="number" min="0" step="0.1" value="0.5" />
+        </label>
+        <label class="full" id="recipient-row">
+          Recipient (Transfer only)
+          <input name="recipient" type="text" placeholder="recipient pubkey (base58)" />
+          <span class="muted-sm">
+            <a href="#" id="recipient-random">use random new address</a>
+          </span>
         </label>
         <label class="check">
           <input name="autoExecute" type="checkbox" checked />
@@ -49,6 +56,36 @@
         <button type="submit" id="submit-btn">submit</button>
       </form>
       <div id="last-result"></div>
+    </section>
+
+    <section class="card wide" id="policy-card">
+      <h2>Update Policy</h2>
+      <p class="muted">
+        Signed by the agent's <strong>policy authority</strong> — a separate
+        keypair from the agent's signing authority. The agent cannot loosen
+        its own leash.
+      </p>
+      <form id="policy-form">
+        <label>
+          Max value (SOL)
+          <input name="maxValueSol" type="number" min="0" step="0.1" value="5" />
+        </label>
+        <label>
+          Window (seconds)
+          <input name="windowSeconds" type="number" min="0" step="1" value="60" />
+          <span class="muted-sm">0 disables rate limit</span>
+        </label>
+        <label>
+          Max per window
+          <input name="maxPerWindow" type="number" min="0" step="1" value="3" />
+        </label>
+        <label class="check"><input type="checkbox" name="Transfer" checked /> Transfer</label>
+        <label class="check"><input type="checkbox" name="Swap" checked /> Swap</label>
+        <label class="check"><input type="checkbox" name="Stake" /> Stake</label>
+        <label class="check"><input type="checkbox" name="ContractCall" /> ContractCall</label>
+        <button type="submit" id="policy-btn">update policy</button>
+      </form>
+      <div id="policy-result"></div>
     </section>
 
     <section class="card wide">
@@ -69,6 +106,8 @@
     <span>program <code id="program-id">…</code></span>
     <span>payer <code id="payer">…</code></span>
     <span>balance <code id="balance">…</code></span>
+    <span>vault <code id="vault">…</code></span>
+    <span>policy authority <code id="policy-authority">…</code></span>
   </footer>
 
   <script src="/app.js"></script>
