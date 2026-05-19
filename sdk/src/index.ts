@@ -21,8 +21,8 @@ import {
 import * as fs from "fs";
 import * as path from "path";
 
-import { Basira } from "../../target/types/basira";
-import idl from "../../target/idl/basira.json";
+import { Basira } from "./idl/basira";
+import idl from "./idl/basira.json";
 
 // ── Action types & helpers ────────────────────────────────────────────────────
 
