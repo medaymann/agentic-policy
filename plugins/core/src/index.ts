@@ -20,7 +20,7 @@ import {
   Keypair,
   statusName,
   summarizeRule,
-} from "../../../sdk/src";
+} from "@basira/sdk";
 
 const SOL = 1_000_000_000;
 
@@ -261,6 +261,6 @@ export {
   decodeRules,
   summarizeRule,
   rpcUrlForCluster,
-} from "../../../sdk/src";
-export type { ActionTypeName, RuleArg, DecodedRule } from "../../../sdk/src";
-export { BN, PublicKey, Keypair } from "../../../sdk/src";
+} from "@basira/sdk";
+export type { ActionTypeName, RuleArg, DecodedRule } from "@basira/sdk";
+export { BN, PublicKey, Keypair } from "@basira/sdk";
