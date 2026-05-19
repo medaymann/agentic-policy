@@ -66,12 +66,4 @@ first rule it violates, and the rejection names that rule's index.
 
 `examples/treasury-character.json` is a reference character wiring the
 plugin. `tests/plugins/eliza.test.ts` shows a runnable end-to-end wire-up
-against a local validator.
-
-## Note on local development
-
-Inside the Basira monorepo this package imports a minimal local Eliza
-interface (`src/eliza-types.ts`) instead of `@elizaos/core`, to keep the
-workspace lean. The published package imports the real types — see
-`eliza-types.ts` for the one-line swap. The plugin code is identical either
-way.
+against an ephemeral validator.

@@ -15,10 +15,6 @@
  * Runtime settings the plugin reads:
  *   - SOLANA_RPC_URL      (default: http://127.0.0.1:8899)
  *   - SOLANA_PRIVATE_KEY  (JSON array or base58 secret key of the agent)
- *
- * NOTE: while developing inside the Basira monorepo this imports a minimal
- * local Eliza interface (`./eliza-types`). When publishing, replace those
- * imports with `@elizaos/core` — see eliza-types.ts for instructions.
  */
 
 import { Connection } from "@solana/web3.js";
@@ -29,7 +25,7 @@ import type {
   Provider,
   IAgentRuntime,
   Memory,
-} from "./eliza-types";
+} from "@elizaos/core";
 import {
   BasiraClient,
   Rule,
@@ -40,7 +36,7 @@ import {
   basiraSubmitAndExecute,
   basiraReplacePolicy,
   basiraStatus,
-} from "../../core/src";
+} from "@basira/plugin-core";
 
 // ── runtime → BasiraClient ────────────────────────────────────────────────────
 
@@ -58,12 +54,13 @@ function parseSecretKey(raw: string): Keypair {
 
 /** Build a BasiraClient from the Eliza runtime's Solana settings. */
 export function clientFromRuntime(runtime: IAgentRuntime): BasiraClient {
-  const rpc = runtime.getSetting("SOLANA_RPC_URL") ?? "http://127.0.0.1:8899";
-  const sk = runtime.getSetting("SOLANA_PRIVATE_KEY");
-  if (!sk) {
+  const rpcRaw = runtime.getSetting("SOLANA_RPC_URL");
+  const rpc = rpcRaw ? String(rpcRaw) : "http://127.0.0.1:8899";
+  const skRaw = runtime.getSetting("SOLANA_PRIVATE_KEY");
+  if (!skRaw) {
     throw new Error("SOLANA_PRIVATE_KEY runtime setting is required");
   }
-  const wallet = new anchor.Wallet(parseSecretKey(sk));
+  const wallet = new anchor.Wallet(parseSecretKey(String(skRaw)));
   return new BasiraClient({ wallet, connection: new Connection(rpc, "confirmed") });
 }
 
@@ -113,8 +110,8 @@ const transferAction: Action = {
       valueSol,
       recipient: new PublicKey(recipient),
     });
-    if (callback) await callback({ text: result.summary, data: result });
-    return result;
+    if (callback) await callback({ text: result.summary });
+    return { success: result.ok, text: result.summary, data: result as any };
   },
 };
 
@@ -142,13 +139,13 @@ const registerAction: Action = {
     const client = clientFromRuntime(runtime);
     const result = await basiraRegister(client, {
       name: String(options?.name ?? "eliza-agent"),
-      rules: (options?.rules ?? []).map(ruleFromDescriptor),
+      rules: ((options?.rules as any[]) ?? []).map(ruleFromDescriptor),
       policyAuthority: options?.policyAuthority
         ? new PublicKey(String(options.policyAuthority))
         : null,
     });
-    if (callback) await callback({ text: result.summary, data: result });
-    return result;
+    if (callback) await callback({ text: result.summary });
+    return { success: result.ok, text: result.summary, data: result as any };
   },
 };
 
@@ -174,10 +171,10 @@ const replacePolicyAction: Action = {
   handler: async (runtime, _message, _state, options, callback) => {
     const client = clientFromRuntime(runtime);
     const result = await basiraReplacePolicy(client, {
-      rules: (options?.rules ?? []).map(ruleFromDescriptor),
+      rules: ((options?.rules as any[]) ?? []).map(ruleFromDescriptor),
     });
-    if (callback) await callback({ text: result.summary, data: result });
-    return result;
+    if (callback) await callback({ text: result.summary });
+    return { success: result.ok, text: result.summary, data: result as any };
   },
 };
 
@@ -203,32 +200,38 @@ const statusAction: Action = {
   handler: async (runtime, _message, _state, _options, callback) => {
     const client = clientFromRuntime(runtime);
     const result = await basiraStatus(client);
-    if (callback) await callback({ text: result.summary, data: result });
-    return result;
+    if (callback) await callback({ text: result.summary });
+    return { success: result.ok, text: result.summary, data: result as any };
   },
 };
 
 // ── provider — injects the live policy into the model's context ──────────────
 
 const policyProvider: Provider = {
+  name: "BASIRA_POLICY",
+  description:
+    "Injects the agent's live Basira policy (rule list, vault balance) into the model's context.",
   get: async (runtime: IAgentRuntime, _message: Memory) => {
     try {
       const client = clientFromRuntime(runtime);
       const status = await basiraStatus(client);
       if (!status.exists) {
-        return "Basira: this agent is not yet registered. Use BASIRA_REGISTER before moving funds.";
+        const text =
+          "Basira: this agent is not yet registered. Use BASIRA_REGISTER before moving funds.";
+        return { text, data: { registered: false } };
       }
       const rules = (status.rules ?? [])
         .map((r) => `  - rule ${r.index}: ${r.summary}`)
         .join("\n");
-      return [
+      const text = [
         `Basira policy (version ${status.policyVersion}):`,
         rules || "  (no rules)",
         `Vault balance: ${status.vaultBalanceSol?.toFixed(4)} SOL.`,
         "All fund movements must go through BASIRA_TRANSFER, which enforces this policy on-chain.",
       ].join("\n");
+      return { text, data: { registered: true, status: status as any } };
     } catch {
-      return "";
+      return { text: "" };
     }
   },
 };
@@ -246,4 +249,4 @@ export const basiraPlugin: Plugin = {
 };
 
 export default basiraPlugin;
-export { Rule } from "../../core/src";
+export { Rule } from "@basira/plugin-core";

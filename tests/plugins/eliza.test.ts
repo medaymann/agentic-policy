@@ -73,7 +73,8 @@ describe("basira plugin — elizaos", () => {
       },
       cb
     );
-    assert.isTrue((reg as any).ok);
+    assert.isTrue((reg as any).success);
+    assert.isTrue((reg as any).data.ok);
     assert.match(callbacks[callbacks.length - 1].text, /Registered agent/);
 
     // ── fund the vault ────────────────────────────────────────────────────
@@ -84,7 +85,7 @@ describe("basira plugin — elizaos", () => {
       {},
       cb
     );
-    const vault = new PublicKey(statusRes.vaultPda);
+    const vault = new PublicKey(statusRes.data.vaultPda);
     const fundTx = new Transaction().add(
       SystemProgram.transfer({
         fromPubkey: authority.publicKey,
@@ -104,8 +105,8 @@ describe("basira plugin — elizaos", () => {
       { recipient: recipient.toBase58(), valueSol: 0.5 },
       cb
     );
-    assert.isTrue(approved.ok);
-    assert.equal(approved.status, "Executed");
+    assert.isTrue(approved.success);
+    assert.equal(approved.data.status, "Executed");
     const after = await connection.getBalance(recipient);
     assert.equal(after - before, 0.5 * SOL, "recipient receives exactly 0.5 SOL");
 
@@ -117,15 +118,15 @@ describe("basira plugin — elizaos", () => {
       { recipient: Keypair.generate().publicKey.toBase58(), valueSol: 5 },
       cb
     );
-    assert.isFalse(rejected.ok);
-    assert.equal(rejected.status, "Rejected");
-    assert.include(rejected.rejectionReason ?? "", "rule 0");
+    assert.isFalse(rejected.success);
+    assert.equal(rejected.data.status, "Rejected");
+    assert.include(rejected.data.rejectionReason ?? "", "rule 0");
 
     // The last callback text should describe the rejection.
     const lastText = callbacks[callbacks.length - 1].text;
     assert.match(lastText, /REJECTED/);
-    console.log(`  ✓ Eliza plugin: ${approved.summary}`);
-    console.log(`  ✓ Eliza plugin: ${rejected.summary}`);
+    console.log(`  ✓ Eliza plugin: ${approved.data.summary}`);
+    console.log(`  ✓ Eliza plugin: ${rejected.data.summary}`);
   });
 
   it("the policy provider injects the live rule list into context", async () => {
@@ -134,11 +135,12 @@ describe("basira plugin — elizaos", () => {
     const runtime = stubRuntime(authority);
 
     // Before registration, the provider tells the model to register.
-    const pre = await basiraPlugin.providers[0].get(
+    const pre = await basiraPlugin.providers![0].get(
       runtime as any,
-      { content: {} } as any
+      { content: {} } as any,
+      {} as any
     );
-    assert.match(pre, /not yet registered/);
+    assert.match(pre.text ?? "", /not yet registered/);
 
     // Register, then the provider should describe the policy.
     await action("BASIRA_REGISTER").handler(
@@ -155,13 +157,14 @@ describe("basira plugin — elizaos", () => {
       undefined
     );
 
-    const post = await basiraPlugin.providers[0].get(
+    const post = await basiraPlugin.providers![0].get(
       runtime as any,
-      { content: {} } as any
+      { content: {} } as any,
+      {} as any
     );
-    assert.match(post, /Basira policy \(version 0\)/);
-    assert.match(post, /rule 0/);
-    assert.match(post, /BASIRA_TRANSFER/);
+    assert.match(post.text ?? "", /Basira policy \(version 0\)/);
+    assert.match(post.text ?? "", /rule 0/);
+    assert.match(post.text ?? "", /BASIRA_TRANSFER/);
     console.log(`  ✓ Eliza plugin provider injects policy context`);
   });
 });
