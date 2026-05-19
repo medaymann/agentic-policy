@@ -1,0 +1,14 @@
+{
+  "name": "@basira/agent-kit",
+  "version": "0.1.0",
+  "description": "Solana Agent Kit plugin for the Basira trust layer — policy-gated, receipted on-chain execution for autonomous agents.",
+  "license": "ISC",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": ["solana", "ai-agent", "solana-agent-kit", "basira", "policy", "trust"],
+  "peerDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.0",
+    "solana-agent-kit": "^2.0.0"
+  }
+}
