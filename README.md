@@ -88,8 +88,9 @@ Runs the suite against an ephemeral validator. Five scenarios, all green.
 
 ## Targeting devnet
 
-The program ID is the same on every cluster (`2oYHgAYscSG4JvQcKcUq4oFGsDFU2SRBtFYFnHxpzgtu`).
-After deploying with `anchor deploy --provider.cluster devnet`:
+The program is **live on devnet** at `2oYHgAYscSG4JvQcKcUq4oFGsDFU2SRBtFYFnHxpzgtu`
+([explorer](https://explorer.solana.com/address/2oYHgAYscSG4JvQcKcUq4oFGsDFU2SRBtFYFnHxpzgtu?cluster=devnet)).
+No deploy needed — point any client at devnet and it works:
 
 ```bash
 yarn demo:devnet
