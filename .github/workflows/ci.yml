@@ -19,6 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: yarn
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
@@ -48,20 +49,41 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: yarn
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@1.89.0
 
+      # Caches ~/.cargo and target/ so `cargo install avm` and the program
+      # build are not recompiled from scratch on every run.
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
+      # Caches the installed Solana + Anchor CLI binaries, keyed on their
+      # versions — a hit skips the install steps below entirely.
+      - name: Cache Solana + Anchor toolchain
+        id: toolchain-cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.local/share/solana
+            ~/.avm
+            ~/.cargo/bin/anchor
+          key: solana-3.1.11-anchor-0.32.1
+
       - name: Install Solana CLI
-        run: |
-          sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.11/install)"
-          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
+        run: sh -c "$(curl -sSfL https://release.anza.xyz/v3.1.11/install)"
 
       - name: Install Anchor
+        if: steps.toolchain-cache.outputs.cache-hit != 'true'
         run: |
           cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
           avm install 0.32.1
           avm use 0.32.1
+
+      - name: Add toolchain to PATH
+        run: echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
 
       - name: Create a CI keypair
         run: solana-keygen new --no-bip39-passphrase -o "$HOME/.config/solana/id.json"
