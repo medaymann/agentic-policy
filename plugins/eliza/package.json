@@ -1,0 +1,14 @@
+{
+  "name": "@basira/eliza-plugin",
+  "version": "0.1.0",
+  "description": "ElizaOS plugin for the Basira trust layer — policy-gated, receipted on-chain execution for autonomous agents.",
+  "license": "ISC",
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "keywords": ["solana", "ai-agent", "elizaos", "eliza", "basira", "policy", "trust"],
+  "peerDependencies": {
+    "@coral-xyz/anchor": "^0.32.1",
+    "@solana/web3.js": "^1.98.0",
+    "@elizaos/core": "^1.0.0"
+  }
+}
