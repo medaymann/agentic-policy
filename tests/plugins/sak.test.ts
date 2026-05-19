@@ -39,8 +39,9 @@ describe("basira plugin — solana agent kit", () => {
     await airdrop(connection, authority.publicKey, 10);
     const wallet = new anchor.Wallet(authority);
 
-    // Stand-in for `new SolanaAgentKit(wallet, RPC, cfg)`.
-    const agent = { wallet, connection };
+    // Stand-in for `new SolanaAgentKit(wallet, RPC, cfg)` — the plugin only
+    // touches `wallet` and `connection`.
+    const agent = { wallet, connection } as any;
 
     const plugin = new BasiraPlugin();
     plugin.initialize(agent);
@@ -108,7 +109,7 @@ describe("basira plugin — solana agent kit", () => {
   it("exposes the same operations as LLM-callable actions", async () => {
     const authority = Keypair.generate();
     await airdrop(connection, authority.publicKey, 5);
-    const agent = { wallet: new anchor.Wallet(authority), connection };
+    const agent = { wallet: new anchor.Wallet(authority), connection } as any;
 
     const plugin = new BasiraPlugin();
     plugin.initialize(agent);

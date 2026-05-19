@@ -64,14 +64,6 @@ const r = await plugin.basira.transfer({ recipient, valueSol: 0.5 });
 
 ## Example
 
-`examples/treasury-bot.ts` runs the full flow against a local validator —
+`examples/treasury-bot.ts` runs the full flow against a validator —
 register, fund the vault, an approved transfer, a rejected over-limit
-transfer.
-
-## Note on local development
-
-Inside the Basira monorepo this package imports a minimal local SAK
-interface (`src/sak-types.ts`) instead of the `solana-agent-kit` package, to
-keep the workspace lean. The published package imports the real types — see
-`sak-types.ts` for the one-line swap. The plugin code itself is identical
-either way.
+transfer. Set `BASIRA_RPC` to point it at devnet.
