@@ -1,5 +1,5 @@
 /**
- * @basira/eliza-plugin — ElizaOS plugin for the Basira trust layer.
+ * @basira-ai/eliza-plugin — ElizaOS plugin for the Basira trust layer.
  *
  * Gives an ElizaOS character policy-gated, receipted on-chain execution.
  * When the character decides to move SOL it fires the BASIRA_TRANSFER
@@ -9,7 +9,7 @@
  *
  * Wire it into a character:
  *
- *   import { basiraPlugin } from "@basira/eliza-plugin";
+ *   import { basiraPlugin } from "@basira-ai/eliza-plugin";
  *   const character = { ..., plugins: [basiraPlugin] };
  *
  * Runtime settings the plugin reads:
@@ -36,7 +36,7 @@ import {
   basiraSubmitAndExecute,
   basiraReplacePolicy,
   basiraStatus,
-} from "@basira/plugin-core";
+} from "@basira-ai/plugin-core";
 
 // ── runtime → BasiraClient ────────────────────────────────────────────────────
 
@@ -249,4 +249,4 @@ export const basiraPlugin: Plugin = {
 };
 
 export default basiraPlugin;
-export { Rule } from "@basira/plugin-core";
+export { Rule } from "@basira-ai/plugin-core";

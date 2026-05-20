@@ -1,7 +1,7 @@
 {
   "name": "TreasuryBot",
-  "description": "An ElizaOS character that manages a small treasury. Every fund movement is routed through the Basira on-chain policy engine via the @basira/eliza-plugin.",
-  "plugins": ["@basira/eliza-plugin"],
+  "description": "An ElizaOS character that manages a small treasury. Every fund movement is routed through the Basira on-chain policy engine via the @basira-ai/eliza-plugin.",
+  "plugins": ["@basira-ai/eliza-plugin"],
   "settings": {
     "SOLANA_RPC_URL": "http://127.0.0.1:8899",
     "SOLANA_PRIVATE_KEY": "<JSON byte array of the agent's keypair, e.g. [12,34,...]>"

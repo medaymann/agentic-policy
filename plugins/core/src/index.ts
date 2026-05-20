@@ -1,5 +1,5 @@
 /**
- * @basira/plugin-core — framework-agnostic Basira action functions.
+ * @basira-ai/plugin-core — framework-agnostic Basira action functions.
  *
  * These are the operations a framework plugin (Solana Agent Kit, ElizaOS,
  * GOAT, ...) exposes to an autonomous agent. They wrap the BasiraClient SDK
@@ -20,7 +20,7 @@ import {
   Keypair,
   statusName,
   summarizeRule,
-} from "@basira/sdk";
+} from "@basira-ai/sdk";
 
 const SOL = 1_000_000_000;
 
@@ -261,6 +261,6 @@ export {
   decodeRules,
   summarizeRule,
   rpcUrlForCluster,
-} from "@basira/sdk";
-export type { ActionTypeName, RuleArg, DecodedRule } from "@basira/sdk";
-export { BN, PublicKey, Keypair } from "@basira/sdk";
+} from "@basira-ai/sdk";
+export type { ActionTypeName, RuleArg, DecodedRule } from "@basira-ai/sdk";
+export { BN, PublicKey, Keypair } from "@basira-ai/sdk";

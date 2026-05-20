@@ -1,5 +1,5 @@
 {
-  "name": "@basira/sdk",
+  "name": "@basira-ai/sdk",
   "version": "0.1.0",
   "description": "TypeScript SDK for the Basira on-chain trust layer — register agents, compose policy rule lists, submit and execute policy-gated intents on Solana.",
   "license": "ISC",

@@ -1,4 +1,4 @@
-# @basira/sdk
+# @basira-ai/sdk
 
 TypeScript SDK for the **Basira** on-chain trust layer — an Anchor program
 on Solana that gives autonomous agents a policy-gated, receipted execution
@@ -10,7 +10,7 @@ The program is **live on devnet** at
 ## Install
 
 ```bash
-npm install @basira/sdk
+npm install @basira-ai/sdk
 ```
 
 ## What it does
@@ -30,7 +30,7 @@ The SDK wraps that program:
 ## Use
 
 ```ts
-import { BasiraClient, Rule } from "@basira/sdk";
+import { BasiraClient, Rule } from "@basira-ai/sdk";
 
 const client = new BasiraClient({ rpcUrl: "https://api.devnet.solana.com" });
 
@@ -49,7 +49,7 @@ await client.registerAgent("treasury-bot", [
 Most agent authors don't use this SDK directly — they install a framework
 plugin built on it:
 
-- `@basira/agent-kit` — Solana Agent Kit plugin
-- `@basira/eliza-plugin` — ElizaOS plugin
+- `@basira-ai/agent-kit` — Solana Agent Kit plugin
+- `@basira-ai/eliza-plugin` — ElizaOS plugin
 
-Both depend on `@basira/plugin-core`, the framework-agnostic action layer.
+Both depend on `@basira-ai/plugin-core`, the framework-agnostic action layer.

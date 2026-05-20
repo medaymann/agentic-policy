@@ -1,5 +1,5 @@
 {
-  "name": "@basira/agent-kit",
+  "name": "@basira-ai/agent-kit",
   "version": "0.1.0",
   "description": "Solana Agent Kit plugin for the Basira trust layer — policy-gated, receipted on-chain execution for autonomous agents.",
   "license": "ISC",
@@ -12,7 +12,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@basira/plugin-core": "^0.1.0",
+    "@basira-ai/plugin-core": "^0.1.0",
     "zod": "^3.23.0"
   },
   "peerDependencies": {

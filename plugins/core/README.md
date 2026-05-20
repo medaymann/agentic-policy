@@ -1,9 +1,9 @@
-# @basira/plugin-core
+# @basira-ai/plugin-core
 
 Framework-agnostic action functions for the **Basira** trust layer.
 
-This is the layer the Basira framework plugins (`@basira/agent-kit`,
-`@basira/eliza-plugin`) are built on. It wraps the `@basira/sdk` client and
+This is the layer the Basira framework plugins (`@basira-ai/agent-kit`,
+`@basira-ai/eliza-plugin`) are built on. It wraps the `@basira-ai/sdk` client and
 exposes the operations an autonomous agent performs, each returning a small,
 JSON-friendly result object an LLM tool layer can pass straight back into a
 model's context.
@@ -15,7 +15,7 @@ plugin for a framework Basira does not yet ship one for (GOAT, Rig, …).
 ## Install
 
 ```bash
-npm install @basira/plugin-core
+npm install @basira-ai/plugin-core
 ```
 
 ## Functions
@@ -34,8 +34,8 @@ Each returns a result object with a human-readable `summary` field.
 ## Use
 
 ```ts
-import { BasiraClient } from "@basira/sdk";
-import { basiraSubmitAndExecute } from "@basira/plugin-core";
+import { BasiraClient } from "@basira-ai/sdk";
+import { basiraSubmitAndExecute } from "@basira-ai/plugin-core";
 
 const result = await basiraSubmitAndExecute(client, {
   action: "Transfer",

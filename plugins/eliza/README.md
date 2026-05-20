@@ -1,4 +1,4 @@
-# @basira/eliza-plugin
+# @basira-ai/eliza-plugin
 
 ElizaOS plugin for the **Basira** trust layer.
 
@@ -11,13 +11,13 @@ immutable on-chain receipt.
 ## Install
 
 ```bash
-npm install @basira/eliza-plugin
+npm install @basira-ai/eliza-plugin
 ```
 
 ## Use
 
 ```ts
-import { basiraPlugin } from "@basira/eliza-plugin";
+import { basiraPlugin } from "@basira-ai/eliza-plugin";
 
 const character = {
   name: "TreasuryBot",

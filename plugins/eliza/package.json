@@ -1,5 +1,5 @@
 {
-  "name": "@basira/eliza-plugin",
+  "name": "@basira-ai/eliza-plugin",
   "version": "0.1.0",
   "description": "ElizaOS plugin for the Basira trust layer — policy-gated, receipted on-chain execution for autonomous agents.",
   "license": "ISC",
@@ -12,7 +12,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@basira/plugin-core": "^0.1.0"
+    "@basira-ai/plugin-core": "^0.1.0"
   },
   "peerDependencies": {
     "@coral-xyz/anchor": "^0.32.1",

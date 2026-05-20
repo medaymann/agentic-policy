@@ -1,5 +1,5 @@
 {
-  "name": "@basira/plugin-core",
+  "name": "@basira-ai/plugin-core",
   "version": "0.1.0",
   "description": "Framework-agnostic Basira action functions shared by the Solana Agent Kit and ElizaOS plugins.",
   "license": "ISC",
@@ -12,7 +12,7 @@
     "prepublishOnly": "yarn build"
   },
   "dependencies": {
-    "@basira/sdk": "^0.1.0"
+    "@basira-ai/sdk": "^0.1.0"
   },
   "peerDependencies": {
     "@coral-xyz/anchor": "^0.32.1",

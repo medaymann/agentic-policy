@@ -21,7 +21,7 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Connection, Keypair, SystemProgram, Transaction } from "@solana/web3.js";
 import { BasiraPlugin } from "../src";
-import { loadKeypair, defaultKeypairPath } from "@basira/sdk";
+import { loadKeypair, defaultKeypairPath } from "@basira-ai/sdk";
 
 const SOL = 1_000_000_000;
 const RPC = process.env.BASIRA_RPC ?? "http://127.0.0.1:8899";

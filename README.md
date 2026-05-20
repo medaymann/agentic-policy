@@ -59,12 +59,12 @@ it in and the agent's fund movements route through the policy engine.
 ### Solana Agent Kit
 
 ```bash
-npm install @basira/agent-kit
+npm install @basira-ai/agent-kit
 ```
 
 ```ts
 import { SolanaAgentKit } from "solana-agent-kit";
-import { BasiraPlugin } from "@basira/agent-kit";
+import { BasiraPlugin } from "@basira-ai/agent-kit";
 
 const agent = new SolanaAgentKit(wallet, rpcUrl, {}).use(new BasiraPlugin());
 
@@ -86,11 +86,11 @@ const result = await agent.methods.basira_transfer(agent, {
 ### ElizaOS
 
 ```bash
-npm install @basira/eliza-plugin
+npm install @basira-ai/eliza-plugin
 ```
 
 ```ts
-import { basiraPlugin } from "@basira/eliza-plugin";
+import { basiraPlugin } from "@basira-ai/eliza-plugin";
 
 const character = {
   name: "TreasuryBot",
@@ -107,18 +107,18 @@ const character = {
 For agents not on a supported framework:
 
 ```bash
-npm install @basira/sdk
+npm install @basira-ai/sdk
 ```
 
 ```ts
-import { BasiraClient, Rule } from "@basira/sdk";
+import { BasiraClient, Rule } from "@basira-ai/sdk";
 
 const client = new BasiraClient({ rpcUrl: "https://api.devnet.solana.com" });
 await client.registerAgent("my-agent", [Rule.maxValue(1_000_000_000)]);
 ```
 
 The program is already deployed to devnet, so clients need no program
-deploy and no IDL file — `@basira/sdk` bundles it.
+deploy and no IDL file — `@basira-ai/sdk` bundles it.
 
 > **One required step:** transfers move SOL from a program-owned **vault
 > PDA**, not the wallet directly. After registering, send SOL once to the
@@ -128,10 +128,10 @@ deploy and no IDL file — `@basira/sdk` bundles it.
 
 | Package | Description |
 |---|---|
-| [`@basira/sdk`](./sdk) | TypeScript SDK wrapping the on-chain program. |
-| [`@basira/plugin-core`](./plugins/core) | Framework-agnostic action functions. |
-| [`@basira/agent-kit`](./plugins/solana-agent-kit) | Solana Agent Kit plugin. |
-| [`@basira/eliza-plugin`](./plugins/eliza) | ElizaOS plugin. |
+| [`@basira-ai/sdk`](./sdk) | TypeScript SDK wrapping the on-chain program. |
+| [`@basira-ai/plugin-core`](./plugins/core) | Framework-agnostic action functions. |
+| [`@basira-ai/agent-kit`](./plugins/solana-agent-kit) | Solana Agent Kit plugin. |
+| [`@basira-ai/eliza-plugin`](./plugins/eliza) | ElizaOS plugin. |
 
 ## Running locally
 
@@ -158,9 +158,9 @@ deployment instead of a local validator.
 
 ```
 programs/basira/   Anchor program — the policy engine
-sdk/               @basira/sdk — TypeScript client
-plugins/core/      @basira/plugin-core — shared action layer
-plugins/*/         @basira/agent-kit, @basira/eliza-plugin
+sdk/               @basira-ai/sdk — TypeScript client
+plugins/core/      @basira-ai/plugin-core — shared action layer
+plugins/*/         @basira-ai/agent-kit, @basira-ai/eliza-plugin
 demo/              scripted CLI walkthrough
 web/               Express server + UI for live demoing
 tests/             Anchor test suite (program + plugin integration tests)

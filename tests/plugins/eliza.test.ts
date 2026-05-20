@@ -1,5 +1,5 @@
 /**
- * Integration test — @basira/eliza-plugin.
+ * Integration test — @basira-ai/eliza-plugin.
  *
  * Drives the plugin's action handlers against a real ephemeral validator
  * using a stubbed Eliza runtime (just `getSetting`). We assert the on-chain

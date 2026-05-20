@@ -10,7 +10,7 @@
   "scripts": {
     "lint:fix": "prettier */*.js \"*/**/*{.js,.ts}\" -w",
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check",
-    "build:packages": "yarn workspace @basira/sdk build && yarn workspace @basira/plugin-core build && yarn workspace @basira/agent-kit build && yarn workspace @basira/eliza-plugin build",
+    "build:packages": "yarn workspace @basira-ai/sdk build && yarn workspace @basira-ai/plugin-core build && yarn workspace @basira-ai/agent-kit build && yarn workspace @basira-ai/eliza-plugin build",
     "demo": "ts-node demo/run.ts",
     "demo:devnet": "BASIRA_CLUSTER=devnet ts-node demo/run.ts",
     "web": "ts-node web/server.ts",

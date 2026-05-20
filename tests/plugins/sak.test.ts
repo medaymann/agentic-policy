@@ -1,5 +1,5 @@
 /**
- * Integration test — @basira/agent-kit plugin.
+ * Integration test — @basira-ai/agent-kit plugin.
  *
  * Exercises the plugin's wire-up against a real ephemeral validator: a
  * stand-in SAK agent (real wallet + connection) registers via the plugin,

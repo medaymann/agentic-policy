@@ -1,5 +1,5 @@
 /**
- * @basira/agent-kit — Solana Agent Kit plugin for the Basira trust layer.
+ * @basira-ai/agent-kit — Solana Agent Kit plugin for the Basira trust layer.
  *
  * Drops Basira's policy-gated execution into a Solana Agent Kit agent.
  * Instead of signing transfers directly, the agent calls `basira_transfer`,
@@ -10,7 +10,7 @@
  * Usage:
  *
  *   import { SolanaAgentKit } from "solana-agent-kit";
- *   import { BasiraPlugin } from "@basira/agent-kit";
+ *   import { BasiraPlugin } from "@basira-ai/agent-kit";
  *
  *   const agent = new SolanaAgentKit(wallet, rpcUrl, cfg)
  *     .use(new BasiraPlugin());
@@ -31,7 +31,7 @@ import {
   basiraSubmitAndExecute,
   basiraReplacePolicy,
   basiraStatus,
-} from "@basira/plugin-core";
+} from "@basira-ai/plugin-core";
 
 export interface BasiraPluginOpts {
   /** Optional RPC override; by default the agent's own connection is used. */
@@ -236,4 +236,4 @@ export class BasiraPlugin implements Plugin {
 }
 
 export default BasiraPlugin;
-export { Rule } from "@basira/plugin-core";
+export { Rule } from "@basira-ai/plugin-core";

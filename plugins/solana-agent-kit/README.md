@@ -1,4 +1,4 @@
-# @basira/agent-kit
+# @basira-ai/agent-kit
 
 Solana Agent Kit plugin for the **Basira** trust layer.
 
@@ -10,14 +10,14 @@ exposes that flow to a Solana Agent Kit agent.
 ## Install
 
 ```bash
-npm install @basira/agent-kit
+npm install @basira-ai/agent-kit
 ```
 
 ## Use
 
 ```ts
 import { SolanaAgentKit } from "solana-agent-kit";
-import { BasiraPlugin } from "@basira/agent-kit";
+import { BasiraPlugin } from "@basira-ai/agent-kit";
 
 const agent = new SolanaAgentKit(wallet, rpcUrl, config)
   .use(new BasiraPlugin());
